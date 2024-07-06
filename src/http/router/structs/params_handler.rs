@@ -13,22 +13,22 @@ pub struct ParamsHandler {
 
 pub type Params = HashMap<String, String>;
 
-impl From<(HTTPRequest, Route)> for ParamsHandler {
-    fn from((request , ressource): (HTTPRequest, Route)) -> Self {
+impl From<(&HTTPRequest, Route)> for ParamsHandler {
+    fn from((request , ressource): (&HTTPRequest, Route)) -> Self {
         let positions =  ressource.route.split('/')
             .enumerate()
             .filter(|(_, val)| val.starts_with('{'))
             .collect::<HashMap<usize, &str>>();
 
         info!("Params Position: {:?}", positions);
-        let params = request.start_line.ressource.split('/')
+        let params = request.start_line.resource().split('/')
             .enumerate()
             .filter(|(index, _)| positions.keys().collect::<Vec<&usize>>().contains(&index))
             .map(|(index, param)| (path_param_name_from_position(positions.clone(), index), param.to_string()))
             .collect::<HashMap<String, String>>();
 
         info!("Params: {:?}", params);
-        ParamsHandler { params, body: request.body }
+        ParamsHandler { params, body: request.body.clone() }
     }
 }
 
@@ -48,7 +48,7 @@ mod tests {
     use super::*;
 
     fn route_mock(_: ParamsHandler) -> Response {
-        return Response::from(200);
+        Response::from(200)
     } 
 
 
@@ -60,9 +60,10 @@ mod tests {
         let route = Route {
             verb: Verb::GET,
             route: "rappel/{id}/att/{att}".to_string(),
-            method: route_mock
+            method: route_mock,
+            ..Default::default()
         };
-        let result = ParamsHandler::try_from((request, route));
+        let result = ParamsHandler::try_from((&request, route));
 
         assert!(result.is_ok());
         let params = result.unwrap();

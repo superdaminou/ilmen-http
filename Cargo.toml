@@ -12,3 +12,9 @@ homepage = "https://github.com/superdaminou/ilmen-http"
 [dependencies]
 log = { version = "0.4"}
 ctrlc = "3.4.1"
+strum = "0.26"
+strum_macros = "0.26"
+anyhow = {version = "1.0"}
+thiserror = {version = "1.0"}
+dotenv = "0.15"
+base64 = { version = "0.22" }

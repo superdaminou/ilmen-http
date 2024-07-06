@@ -4,12 +4,12 @@ use std::net::TcpStream;
 use log::info;
 
 use crate::http::router::handle_request;
-use crate::http::structs::HTTPRequest;
-use crate::http::structs::HTTPResponse;
-use crate::http::structs::ThreadPool;
+use crate::http::requests::HTTPRequest;
+use crate::http::responses::HTTPResponse;
+use crate::http::configuration::ThreadPool;
 
 use super::router::Routes;
-use super::structs::Config;
+use super::configuration::Config;
 
 pub fn open_connection(configuration: Option<Config>, handler : Routes){
     info!("Opening connection and listening");
@@ -22,24 +22,24 @@ pub fn open_connection(configuration: Option<Config>, handler : Routes){
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        let clone = handler.clone();
+        let routes = handler.clone();
+        let config = config.clone();
 
         pool.execute(move || {
-            handle_connection(stream, clone);
+            handle_connection(stream, routes, config);
         });
     }
 }
 
 // PRIVATE
-fn handle_connection(mut stream: TcpStream, handler : Routes) {
-    info!("Handling Connection");
+fn handle_connection(mut stream: TcpStream, handler : Routes, config: Config) {
     let mut buffer: [u8; 1024] = [0; 1024];
     stream.read(&mut buffer).unwrap();
 
     let response = 
     HTTPRequest::try_from(buffer)
-        .map(|request |  handle_request(request, handler))
-        .unwrap_or_else(|err| HTTPResponse::from(err));
+        .map(|request |  handle_request(request, handler, config))
+        .unwrap_or_else(HTTPResponse::from);
         
             
     info!("{}", response.to_string());

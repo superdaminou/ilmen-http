@@ -1,7 +1,8 @@
 use core::fmt;
 use std::{error::Error, str::Utf8Error};
 
-use crate::http::structs::{HTTPResponse, Response};
+use crate::{HTTPResponse, Response};
+
 
 #[derive(Debug)]
 pub struct InternalError  {
@@ -42,6 +43,6 @@ impl From<Utf8Error> for InternalError {
 
 impl From<InternalError> for HTTPResponse {
     fn from(_: InternalError) -> Self {
-        return HTTPResponse::from(Response::from((500,"Internal Server Error")));
+        HTTPResponse::from(Response::from((500,"Internal Server Error")))
     }
 }

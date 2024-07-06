@@ -1,39 +1,53 @@
 use std::panic::catch_unwind;
 
-use crate::http::{structs::{HTTPRequest, HTTPResponse, Response, Verb}, errors::internal::InternalError};
+use log::info;
+
+use crate::{http::{ errors::{http_errors::HttpError, InternalError}, requests::Ressource, responses::Code, security::service::{apply_security, SecurityProtocol}}, Config, HTTPRequest, HTTPResponse, Response, Route, Verb};
 
 use super::{Routes, ParamsHandler};
 
-pub fn handle_request(request: HTTPRequest, handler : Routes) -> HTTPResponse {
-    catch_unwind(||route(request, handler))
+pub fn handle_request(request: HTTPRequest, handler : Routes, config: Config) -> HTTPResponse {
+    let response = catch_unwind(||route(&request, handler, config.security))
     .map_err(|_| InternalError::from("Internal Server Error"))
-    .map(|response| HTTPResponse::from(response))
-    .unwrap_or_else(|err| HTTPResponse::from(err))
+    .map(HTTPResponse::from)
+    .unwrap_or_else(HTTPResponse::from);
+    
+    info!("{} {}", Ressource::from(&request), Code::from(&response));
+    
+    response
 }
 
-fn route(request: HTTPRequest, handler : Routes) -> Response {
-    match request.start_line.verb {
+fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) -> Response {
+    match request.start_line.verb() {
         Verb::OPTION => options(),
-        _ => handler.iter()
-                .filter(|route| route.verb == request.start_line.verb)
-                .find(|&route| 
-                    valid_against(request.start_line.ressource.clone(), route.route.clone()))
-                .map_or(Response::from(404), |route| 
-                    (route.method)(ParamsHandler::from((request, route.clone()))))
+        _ => {
+            find_route(request, &handler)
+                .and_then(|route| apply_security(request, route, security))
+                .map(|route| execute(request, route))
+                .unwrap_or_else(Response::from)
+            }
     }
 }
 
+fn execute(request: &HTTPRequest, route: Route ) -> Response {
+    (route.method)(ParamsHandler::from((request, route.clone())))   
+}
 
+fn find_route(request: &HTTPRequest, handler : &Routes) -> Result<Route, HttpError> {
+     handler.iter()
+                .filter(|route| route.verb == request.start_line.verb())
+                .find(|&route| 
+                    valid_against(request.start_line.resource().clone(), route.route.clone()))
+                .map(|r| r.to_owned())
+                .ok_or(HttpError::NotFoundError("Coult not find ressource".to_string()))
+}
 
 fn options() -> Response {
     let headers = vec!["Access-Control-Allow-Methods: POST, GET, DELETE, PATCH, OPTIONS\r\n".to_string()];
     Response::from(headers)
 }
 
-
-fn valid_against(request: String,reference: String) -> bool {
-    
-    
+fn valid_against(request: String,reference: String) -> bool {    
     let splitted_reference = reference.split('/').collect::<Vec<&str>>();
     let request_iter = request.split('/').collect::<Vec<&str>>();
 
@@ -41,20 +55,17 @@ fn valid_against(request: String,reference: String) -> bool {
 
     return (splitted_reference.len() == request_iter.len()) && 
     request_iter.iter()
-        .fold(true, |acc, &request_part| acc && compare(request_part, reference_iter.next()));
+        .all(|request_part| compare(request_part, reference_iter.next()));
 }
 
 fn compare(req_part: &str, ref_part: Option<&&str>)  -> bool {
     match ref_part {
         None => false,
         Some(&ref_part) => {
-            return ref_part.starts_with('{') || req_part == ref_part;
+            ref_part.starts_with('{') || req_part == ref_part
         }
     }
 }
-
-
-
 
 
 // UNIT TEST
@@ -66,7 +77,7 @@ mod tests {
     fn compare_ressource_ok() {
         let reference ="route";
         let incoming ="route";
-        let result = compare(&incoming, Some(&reference));
+        let result = compare(incoming, Some(&reference));
         assert!(result);
     }
 
@@ -74,7 +85,7 @@ mod tests {
     fn compare_ressource_nok() {
         let reference: &str ="route";
         let incoming ="routes";
-        let result = compare(&incoming, Some(&reference));
+        let result = compare(incoming, Some(&reference));
         assert!(!result);
     }
 
@@ -82,7 +93,7 @@ mod tests {
     fn compare_param_ok() {
         let reference ="{id}";
         let incoming ="2";
-        let result = compare(&incoming, Some(&reference));
+        let result = compare(incoming, Some(&reference));
         assert!(result);
     }
 
@@ -101,4 +112,14 @@ mod tests {
         assert!(!valid_against("ressources/1/toto/2".to_string(), "ressource/{id}/toto/{dd}".to_string()));
     }
 
+    #[test]
+    fn handle_request_without_security_should_return_200() {
+
+        let request = HTTPRequest::default();
+        let routes = vec![Route::default()];
+        let config = Config::default();
+
+        let responses_code = handle_request(request, routes, config).to_string().split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        assert_eq!(responses_code.first().unwrap(), &"HTTP/1.1 200 OK");
+    }
 }
