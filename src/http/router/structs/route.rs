@@ -1,4 +1,4 @@
-use crate::{Response, Verb};
+use crate::{HTTPResponse, ResponseBuilder, Verb};
 
 use super::ParamsHandler;
 
@@ -6,7 +6,7 @@ use super::ParamsHandler;
 pub struct Route{
     pub verb  : Verb,
     pub route:  String,
-    pub method : fn(ParamsHandler) -> Response,
+    pub method : fn(ParamsHandler) -> HTTPResponse,
     pub need_security: bool
 }
 
@@ -22,8 +22,8 @@ impl Default for Route {
     }
 }
 
-fn default_method(_: ParamsHandler) -> Response {
-    Response::from(200)
+fn default_method(_: ParamsHandler) -> HTTPResponse {
+    ResponseBuilder::new(200, Some("default".to_string())).build()
 }
 
 pub type Routes = Vec<Route>;

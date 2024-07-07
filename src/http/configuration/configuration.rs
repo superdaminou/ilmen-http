@@ -5,7 +5,7 @@ use crate::http::security::service::SecurityProtocol;
 pub struct Config {
     port: Port,
     ip: Ip,
-    pub security: SecurityProtocol
+    security: SecurityProtocol
 }
 
 
@@ -25,5 +25,17 @@ impl Default for Config {
 impl Config {
     pub fn adresse(&self) -> String {
         format!("{}:{}", self.ip, self.port)
+    }
+
+    pub fn security(&self) -> SecurityProtocol {
+        self.security.clone()
+    }
+
+    pub fn new(port: Port, security: SecurityProtocol) -> Config {
+        Config {
+            port,
+            security,
+            ..Default::default()
+        }
     }
 }

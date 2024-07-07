@@ -43,12 +43,12 @@ fn path_param_name_from_position(params: HashMap<usize, &str>, index: usize) -> 
 #[cfg(test)]
 mod tests {
 
-    use crate::{Verb, Response};
+    use crate::{HTTPResponse, ResponseBuilder, Verb};
 
     use super::*;
 
-    fn route_mock(_: ParamsHandler) -> Response {
-        Response::from(200)
+    fn route_mock(_: ParamsHandler) -> HTTPResponse {
+        ResponseBuilder::new(200, None).build()
     } 
 
 

@@ -52,7 +52,7 @@ impl TryFrom<&str> for HTTPRequest {
         let headers = extract_headers(parsed_request.clone());
         info!("Headers: {:?}", headers);
         
-        let body = match get_header(&headers, "Content-Length:") {
+        let body = match get_header(&headers, "Content-Length") {
             Some(content_length_header) => {        
                 let body_size = content_length_header.1.parse::<usize>().map_err(|e|HttpError::BadRequest(e.to_string()))?; 
                 Some(extract_body(parsed_request, body_size))
@@ -128,7 +128,7 @@ mod tests {
         let http_request = request.unwrap();
         assert_eq!(http_request.start_line, StartLine::new(Verb::POST, "rappel/1".to_string()));
         assert_eq!(http_request.body, Some("toto".to_string()));
-        assert_eq!(http_request.headers, Some(vec![("Content-Length:".to_string(), "4".to_string())]))
+        assert_eq!(http_request.headers, Some(vec![("Content-Length".to_string(), "4".to_string())]))
     }
 
     #[test]

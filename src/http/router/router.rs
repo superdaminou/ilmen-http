@@ -2,34 +2,34 @@ use std::panic::catch_unwind;
 
 use log::info;
 
-use crate::{http::{ errors::{http_errors::HttpError, InternalError}, requests::Ressource, responses::Code, security::service::{apply_security, SecurityProtocol}}, Config, HTTPRequest, HTTPResponse, Response, Route, Verb};
+use crate::{http::{ errors::{http_errors::HttpError, InternalError}, requests::Ressource, security::service::{apply_security, SecurityProtocol}}, Config, HTTPRequest, HTTPResponse, ResponseBuilder, Route, Verb};
 
 use super::{Routes, ParamsHandler};
 
 pub fn handle_request(request: HTTPRequest, handler : Routes, config: Config) -> HTTPResponse {
-    let response = catch_unwind(||route(&request, handler, config.security))
+    let response = catch_unwind(||route(&request, handler, config.security()))
     .map_err(|_| InternalError::from("Internal Server Error"))
     .map(HTTPResponse::from)
     .unwrap_or_else(HTTPResponse::from);
     
-    info!("{} {}", Ressource::from(&request), Code::from(&response));
+    info!("{} {}", Ressource::from(&request), response.code());
     
     response
 }
 
-fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) -> Response {
+fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) -> HTTPResponse {
     match request.start_line.verb() {
         Verb::OPTION => options(),
         _ => {
             find_route(request, &handler)
                 .and_then(|route| apply_security(request, route, security))
                 .map(|route| execute(request, route))
-                .unwrap_or_else(Response::from)
+                .unwrap_or_else(HTTPResponse::from)
             }
     }
 }
 
-fn execute(request: &HTTPRequest, route: Route ) -> Response {
+fn execute(request: &HTTPRequest, route: Route ) -> HTTPResponse {
     (route.method)(ParamsHandler::from((request, route.clone())))   
 }
 
@@ -42,9 +42,10 @@ fn find_route(request: &HTTPRequest, handler : &Routes) -> Result<Route, HttpErr
                 .ok_or(HttpError::NotFoundError("Coult not find ressource".to_string()))
 }
 
-fn options() -> Response {
-    let headers = vec!["Access-Control-Allow-Methods: POST, GET, DELETE, PATCH, OPTIONS\r\n".to_string()];
-    Response::from(headers)
+fn options() -> HTTPResponse {
+        ResponseBuilder::new(200, None)
+            .put_header("Access-Control-Allow-Methods".to_string(), "POST, GET, DELETE, PATCH, OPTIONS".to_string())
+            .build()
 }
 
 fn valid_against(request: String,reference: String) -> bool {    

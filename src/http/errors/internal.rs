@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{error::Error, str::Utf8Error};
 
-use crate::{HTTPResponse, Response};
+use crate::{HTTPResponse, ResponseBuilder};
 
 
 #[derive(Debug)]
@@ -43,6 +43,6 @@ impl From<Utf8Error> for InternalError {
 
 impl From<InternalError> for HTTPResponse {
     fn from(_: InternalError) -> Self {
-        HTTPResponse::from(Response::from((500,"Internal Server Error")))
+        ResponseBuilder::new(500,Some("Internal Server Error".to_string())).build()
     }
 }

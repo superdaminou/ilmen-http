@@ -6,15 +6,11 @@ use crate::{http::HttpError, HTTPRequest, Route};
 pub fn apply_security(request: &HTTPRequest, route: Route, security: SecurityProtocol) -> Result<Route, HttpError> {
     match security {
         SecurityProtocol::None => Ok(()),
-        SecurityProtocol::Basic => {
-            base_auth(request)
-        },
-        SecurityProtocol::OnePassword(_) => todo!(),
+        SecurityProtocol::Basic(validate_methode) => base_auth(request, validate_methode),
     }.map(|_| route)
 }
 
-
-fn base_auth(request: &HTTPRequest) -> Result<(), HttpError>{
+fn base_auth(request: &HTTPRequest, validate_methode: AuthMethod) -> Result<(), HttpError>{
     let header_auth_value : Vec<String> = request.get_header("Authorization")
         .ok_or(HttpError::UnauthorizedError("Missing header".to_string()))?
         .1
@@ -35,24 +31,23 @@ fn base_auth(request: &HTTPRequest) -> Result<(), HttpError>{
             .context("No user password provided")
             .and_then(decode_base64_auth)
             .map_err(|e| HttpError::UnauthorizedError(e.to_string()))
-            .and_then(validate_identity)
+            .map(validate_methode)
+            .and_then(|is_valid_creds| {
+                match is_valid_creds {
+                    true => Ok(()),
+                    false => Err(HttpError::UnauthorizedError("Unauthorized".to_string())),
+                }
+            })
 }
 
-
-fn validate_identity((username, password): (Username, Password)) -> Result<(), HttpError>{
-    if username != "toto" || password != "tata" {
-        return Err(HttpError::UnauthorizedError("Unauthorized".to_string()))
-    }
-    Ok(())
-}
 type Username = String;
 type Password = String;
-
+type AuthMethod = fn((Username, Password)) -> bool;
 
 fn decode_base64_auth(b64_value: &String) -> anyhow::Result<(String, String)>{
     URL_SAFE.decode(b64_value)
-            .context("Not a b64".to_string())
-            .and_then(|vect| String::from_utf8(vect).context("Wesh"))
+            .context("Authentication parameter is not base64 encrypted".to_string())
+            .and_then(|vect| String::from_utf8(vect).context("Could not parse from utf8"))
             .map(|decoded | {
                 let splitter = decoded.split_once(':').unwrap_or(("", ""));
                 (splitter.0.to_string(), splitter.1.to_string())
@@ -62,12 +57,8 @@ fn decode_base64_auth(b64_value: &String) -> anyhow::Result<(String, String)>{
 #[derive(Clone)]
 pub enum SecurityProtocol {
     None,
-    Basic,
-    OnePassword(String)
+    Basic(AuthMethod)
 }
-
-const REALM : &str = "default";
-
 
 #[cfg(test)]
 mod tests {
@@ -78,8 +69,9 @@ mod tests {
         let buffer = "GET rappel/1 HTTP/1.1\r\nAuthorization: Basic dG90bzp0YXRh\r\n\r\ntoto";
         
         let  request = HTTPRequest::try_from(buffer).unwrap();
+        let validate : AuthMethod= |_| true;
 
-        let result = apply_security(&request, Route::default(), SecurityProtocol::Basic).unwrap();
+        let result = apply_security(&request, Route::default(), SecurityProtocol::Basic(validate)).unwrap();
         assert_eq!(result, Route::default())
     }
 
@@ -89,7 +81,21 @@ mod tests {
         
         let  request = HTTPRequest::try_from(buffer).unwrap();
 
-        let result = apply_security(&request, Route::default(), SecurityProtocol::Basic).unwrap_err();
+        let validate : AuthMethod = |_| false;
+
+        let result = apply_security(&request, Route::default(), SecurityProtocol::Basic(validate)).unwrap_err();
         assert_eq!(result, HttpError::UnauthorizedError("Unauthorized".to_string()))
+    }
+
+    #[test]
+    fn apply_basic_security_with_bad_protocol() {
+        let buffer = "GET rappel/1 HTTP/1.1\r\nAuthorization: Basics dG90bzp0YXR1YWE=\r\n\r\ntoto";
+        
+        let  request = HTTPRequest::try_from(buffer).unwrap();
+
+        let validate : AuthMethod = |_| false;
+
+        let result = apply_security(&request, Route::default(), SecurityProtocol::Basic(validate)).unwrap_err();
+        assert_eq!(result, HttpError::UnauthorizedError("Wrong Protocol".to_string()))
     }
 }

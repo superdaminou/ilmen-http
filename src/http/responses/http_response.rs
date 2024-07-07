@@ -1,25 +1,34 @@
 use std::fmt;
 
-use crate::http::errors::http_errors::HttpError;
+use crate::http::{errors::http_errors::HttpError, header::{HeaderKey, HeaderValue, Headers}};
 
 const PROTOCOL : &str= "HTTP/1.1";
 
 pub struct HTTPResponse {
     code: i32,
-    acces_control: String,
-    content_type : String,
-    body: String,
-    headers: Vec<String>
+    body: Option<String>,
+    headers: Headers
 }
 
 impl HTTPResponse {
-    fn new(code: i32,headers: Vec<String>,  body: Option<&str>) -> HTTPResponse {
+    fn new(code: i32, body: Option<&str>) -> HTTPResponse {
+        let mut headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()), 
+            ("Content-Type".to_string(), "application/json".to_string())
+        ];
+
+        match body {
+            Some(b) => {
+                headers.push(("Content-Type".to_string(), "application/json".to_string()));
+                headers.push(("Content-Length".to_string(), b.len().to_string()));
+            },
+            None => (),
+        }
+
         HTTPResponse {
             code, 
             headers,  
-            body: String::from(body.unwrap_or("")), 
-            acces_control: "*".to_string(), 
-            content_type: "application/json".to_string()
+            body: body.map(String::from)
         }
     }
 
@@ -31,26 +40,13 @@ impl HTTPResponse {
 impl Default for HTTPResponse {
     fn default() -> Self {
         Self { 
-            code: 404, 
-            acces_control: "*".to_string(),
-            content_type:  "application/json".to_string(), 
+            code: 404,  
             body: Default::default(), 
             headers: Default::default() }
     }
 }
 
-impl From<Response> for HTTPResponse {
-    fn from(response: Response) -> Self {
-        HTTPResponse::new(response.code,Vec::new() ,response.body.as_deref())
-    }
-}
 
-
-impl From<Vec<String>> for HTTPResponse {
-    fn from(headers: Vec<String>) -> Self {
-        HTTPResponse::new(200, headers, None)
-    }
-}
 
 fn construct_status_line(code : i32) -> String {
     format!("{} {} {}", PROTOCOL, code, message_from_code(code))
@@ -68,86 +64,70 @@ fn message_from_code(code : i32) -> String {
 
 impl fmt::Display for HTTPResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let headers= self.headers.iter().map(|(key, value)| key.to_string() + ": " + value).collect::<Vec<String>>().join("\r\n");
+        let body = match &self.body {
+            Some(body) => "\r\n".to_string() + body,
+            None => "".to_string(),
+        };
         write!(f,
-            "{}\r\n{}Access-Control-Allow-Origin: {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+            "{}\r\n{}\r\n\r\n{}",
             construct_status_line(self.code),
-            self.headers.join("\r\n"),
-            self.acces_control,
-            self.content_type,
-            self.body.len(),
-            self.body
+            headers,
+            body
         )
     }
 }
 
 
 
-pub struct Response {
-    pub code: i32,
-    pub headers: Vec<String>,
-    pub body: Option<String>
-}
-
-
-impl Response {
-    fn new(code: i32,headers: Vec<String>,  body: Option<String>) -> Response {
-        Response {code, headers, body}
-    }    
-}
-
-
-impl From<i32> for Response {
-    fn from(code: i32) -> Self {
-        Response::new(code, Vec::new(), None)
-    }
-}
-
-
-impl From<(i32, &str)> for Response {
-    fn from(code: (i32, &str)) -> Self {
-        Response::new(code.0, Vec::new(),Some(code.1.to_string()))
-    }
-}
-
-impl From<Vec<String>> for Response {
-    fn from(headers: Vec<String>) -> Self {
-        Response::new(200, headers, None)
-    }
-}
-
-impl From<(i32, String)> for Response {
-    fn from(code: (i32, String)) -> Self {
-        Response::new(code.0, Vec::new(),Some(code.1))
-    }
-}
-
-impl From<&HTTPResponse> for Code {
-    fn from(value: &HTTPResponse) -> Code {
-        value.code
-    }
-}
-
-impl From<HttpError> for Response {
-    fn from(value: HttpError) -> Self {
-        match value {
-            HttpError::DefaultError => Response::from(0),
-            HttpError::NotFoundError(_) => Response::from(404),
-            HttpError::UnauthorizedError(_) => Response::from(401),
-            HttpError::BadRequest(_) => Response::from(400),
-        }
-    }
-}
-
 impl From<HttpError> for HTTPResponse {
     fn from(value: HttpError) -> Self {
         match value {
-            HttpError::DefaultError => HTTPResponse::from(Response::from(0)),
-            HttpError::NotFoundError(_) => HTTPResponse::from(Response::from(404)),
-            HttpError::UnauthorizedError(_) => HTTPResponse::from(Response::from(401)),
-            HttpError::BadRequest(_) => HTTPResponse::from(Response::from(400)),
+            HttpError::DefaultError => ResponseBuilder::new(0, None).build(),
+            HttpError::NotFoundError(_) => ResponseBuilder::new(404, Some("Not found".to_string())).build(),
+            HttpError::UnauthorizedError(_) => ResponseBuilder::new(401, None).build(),
+            HttpError::BadRequest(_) => ResponseBuilder::new(400, None).build(),
         }
     }
 }
 
 
 pub type Code = i32;
+
+
+#[derive(Default)]
+pub struct ResponseBuilder {
+    code: i32,
+    body: Option<String>,
+    headers: Headers
+}
+
+
+impl ResponseBuilder {
+    pub fn new(code: i32, body: Option<String>) -> Self {
+        ResponseBuilder {
+            code,
+            body,
+            ..Default::default()
+        }
+    }
+
+    pub fn content_type(mut self, content_type: String) -> Self {
+        self.headers.push(("Content-Type".to_string(), content_type)); 
+        self
+    }
+
+    pub fn build(&self) -> HTTPResponse{
+        let headers = vec![];
+        HTTPResponse {
+            body: self.body.clone(),
+            code: self.code,
+            headers
+        }   
+    }
+
+    pub fn put_header(mut self, key: HeaderKey, value: HeaderValue) -> ResponseBuilder {
+        self.headers.push((key, value));
+        self
+    }
+}
