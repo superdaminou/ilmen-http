@@ -11,27 +11,6 @@ pub struct HTTPResponse {
 }
 
 impl HTTPResponse {
-    fn new(code: i32, body: Option<&str>) -> HTTPResponse {
-        let mut headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()), 
-            ("Content-Type".to_string(), "application/json".to_string())
-        ];
-
-        match body {
-            Some(b) => {
-                headers.push(("Content-Type".to_string(), "application/json".to_string()));
-                headers.push(("Content-Length".to_string(), b.len().to_string()));
-            },
-            None => (),
-        }
-
-        HTTPResponse {
-            code, 
-            headers,  
-            body: body.map(String::from)
-        }
-    }
-
     pub fn code(&self) -> i32 {
         self.code
     }    
@@ -66,11 +45,11 @@ impl fmt::Display for HTTPResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let headers= self.headers.iter().map(|(key, value)| key.to_string() + ": " + value).collect::<Vec<String>>().join("\r\n");
         let body = match &self.body {
-            Some(body) => "\r\n".to_string() + body,
-            None => "".to_string(),
+            Some(body) =>  "\r\n\r\n".to_string() + body,
+            None => "\r\n".to_string(),
         };
         write!(f,
-            "{}\r\n{}\r\n\r\n{}",
+            "{}\r\n{}{}",
             construct_status_line(self.code),
             headers,
             body
@@ -90,9 +69,6 @@ impl From<HttpError> for HTTPResponse {
         }
     }
 }
-
-
-pub type Code = i32;
 
 
 #[derive(Default)]
@@ -128,6 +104,11 @@ impl ResponseBuilder {
 
     pub fn put_header(mut self, key: HeaderKey, value: HeaderValue) -> ResponseBuilder {
         self.headers.push((key, value));
+        self
+    }
+
+    pub fn body(mut self, body: String) -> ResponseBuilder {
+        self.body = Some(body);
         self
     }
 }

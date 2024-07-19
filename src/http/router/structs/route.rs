@@ -1,14 +1,15 @@
-use crate::{HTTPResponse, ResponseBuilder, Verb};
+use crate::{http::HTTPRequest, HTTPResponse, ResponseBuilder, Verb};
 
-use super::ParamsHandler;
+use super::request_handler::RequestHandler;
 
 #[derive(PartialEq, Eq,Debug)]
 pub struct Route{
     pub verb  : Verb,
     pub route:  String,
-    pub method : fn(ParamsHandler) -> HTTPResponse,
+    pub method : fn(&RequestHandler) -> HTTPResponse,
     pub need_security: bool
 }
+
 
 impl Clone for Route {
     fn clone(&self) -> Self {
@@ -22,7 +23,7 @@ impl Default for Route {
     }
 }
 
-fn default_method(_: ParamsHandler) -> HTTPResponse {
+fn default_method(_: &RequestHandler) -> HTTPResponse {
     ResponseBuilder::new(200, Some("default".to_string())).build()
 }
 

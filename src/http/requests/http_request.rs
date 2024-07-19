@@ -1,35 +1,32 @@
+use std::str::FromStr;
 use std::usize;
 use std::str;
 use log::info;
 
 use crate::http::errors::http_errors::HttpError;
+use crate::http::header::Headers;
+use crate::Verb;
 
-use super::startline::StartLine;
-#[derive(PartialEq, Debug, Clone)]
-
-#[derive(Default)]
+#[derive(Clone)]
 pub struct HTTPRequest {
-    pub start_line: StartLine,
+    pub protocol: Protocol,
+    pub verb: Verb,
+    pub resource: Resource, 
+    pub query_params: Option<QueryParams>,
     pub headers: Option<Headers>,
     pub body: Option<Body>
 }
 
-type Headers = Vec<Header>;
-type Header = (HeaderKey, HeaderValue);
-type HeaderKey = String;
-type HeaderValue = String;
-
+pub type Resource = String; 
+pub type Protocol = String; 
+pub type QueryParams = Vec<(String, String)>;
 type Body = String;
-pub type Ressource = String;
 
-
-impl From<&HTTPRequest> for Ressource {
-    fn from(value: &HTTPRequest) -> Self {
-        value.start_line.to_string()
+impl Default for HTTPRequest {
+    fn default() -> Self {
+        Self { protocol: Default::default(), verb: Verb::GET, resource: "/".to_string(), query_params: Default::default(), headers: Default::default(), body: Default::default() }
     }
 }
-
-
 
 impl TryFrom<[u8; 1024]> for HTTPRequest {
     type Error = HttpError;
@@ -41,39 +38,80 @@ impl TryFrom<[u8; 1024]> for HTTPRequest {
     }
 }
 
+impl TryFrom<Vec<String>> for Verb {
+    type Error = HttpError;
+
+    fn try_from(value: Vec<String>) -> Result<Self, HttpError> {
+        value
+            .get(0)
+            .ok_or(HttpError::BadRequest("Missing verb".to_string()))
+            .and_then(|verb| Verb::from_str(&verb))
+    }
+}
+
+
+
 impl TryFrom<&str> for HTTPRequest {
     type Error = HttpError;
     fn try_from(buffer: &str) -> Result<Self, HttpError> {
         let parsed_request = parse(buffer);
         
-        let start_line = StartLine::try_from(parsed_request.clone())?;
-        info!("Ressource: {}", start_line.to_string());
+        let decomposed_start_line = parsed_request.get(0)
+            .ok_or(HttpError::BadRequest("Mising ressources".to_string()))?
+            .split(' ')
+            .take(3)
+            .map(String::from)
+            .collect::<Vec<String>>();
+
+        let verb = Verb::try_from(decomposed_start_line.clone())?;
+
+        let protocol = decomposed_start_line
+            .get(2)
+            .ok_or(HttpError::BadRequest("Missing protocol".to_string()))?
+            .to_string();
+
+
+        let requested_resource = decomposed_start_line
+            .get(1)
+            .ok_or(HttpError::BadRequest("No ressource".to_string()))
+            .map(|str| str.split("?").collect::<Vec<&str>>())?; 
+
+        let resource = requested_resource.get(0).ok_or(HttpError::BadRequest("Missing path".to_string()))?;
+
+        let query_params = requested_resource.get(1)
+            .map(|params| params.split("&").collect::<Vec<&str>>())
+            .map(|vec_params| 
+                vec_params.iter()
+                    .map(|couple| couple
+                        .split_once("=")
+                        .unwrap_or((couple, "")))
+                    .map(|(a,b)|(a.to_string(), b.to_string()))
+                    .collect::<Vec<(String,String)>>());
+
 
         let headers = extract_headers(parsed_request.clone());
         info!("Headers: {:?}", headers);
         
-        let body = match get_header(&headers, "Content-Length") {
-            Some(content_length_header) => {        
-                let body_size = content_length_header.1.parse::<usize>().map_err(|e|HttpError::BadRequest(e.to_string()))?; 
-                Some(extract_body(parsed_request, body_size))
-                
-            },
-            None => None,
-        };
+        let body = get_header(&headers, "Content-Length")
+            .map(|(_, length)| length.parse::<usize>())
+            .transpose()
+            .map_err(|_| HttpError::BadRequest("Content Length not a number".to_string()))?
+            .map(|length| extract_body(buffer, length));
 
-        Ok (HTTPRequest { start_line, headers: Some(headers), body})
+        Ok (HTTPRequest {protocol, 
+            verb, 
+            query_params: query_params, 
+            headers: Some(headers), 
+            body,
+            resource: resource.to_string()})
     }
 }
 
 
-fn extract_body(request : Vec<String>, content_length: usize) -> Body {
-    return request.iter()
-            .skip_while(|&str| str.trim() != "")
-            .skip(1)
-            .fold("".to_owned(), |acc, e| acc + e)
-            .to_string()
-            .drain(0..content_length)
-            .collect();
+fn extract_body(request : &str, content_length: usize) -> Body {
+    return request.split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string().drain(0..content_length).collect::<String>())
+        .unwrap_or_default();
 }
 
 
@@ -121,14 +159,16 @@ mod tests {
 
     #[test]
     fn request_try_from_ok() {
-        let buffer = "POST rappel/1 HTTP/1.1\r\nContent-Length: 4\r\n\r\ntoto";
+        let buffer = "POST rappel/1?moi=toi&toi=moi HTTP/1.1\r\nContent-Length: 10\r\n\r\ntoto\r\ntata";
         
         let  request = HTTPRequest::try_from(buffer);
         
         let http_request = request.unwrap();
-        assert_eq!(http_request.start_line, StartLine::new(Verb::POST, "rappel/1".to_string()));
-        assert_eq!(http_request.body, Some("toto".to_string()));
-        assert_eq!(http_request.headers, Some(vec![("Content-Length".to_string(), "4".to_string())]))
+        assert_eq!(http_request.verb, Verb::POST);
+        assert_eq!(http_request.resource, "rappel/1");
+        assert_eq!(http_request.query_params, Some(vec![("moi".to_string(), "toi".to_string()), ("toi".to_string(),"moi".to_string())]));
+        assert_eq!(http_request.body, Some("toto\r\ntata".to_string()));
+        assert_eq!(http_request.headers, Some(vec![("Content-Length".to_string(), "10".to_string())]))
     }
 
     #[test]
@@ -140,14 +180,6 @@ mod tests {
         assert!(request.is_ok());
     }
 
-    #[test]
-    fn extract_body_ok() {
-        let request = vec!["POST rappel/1 HTTP/1.1".to_string()," ".to_string(),"toto".to_string(), "toto".to_string()];
-        
-        let  request = extract_body(request, 8);
-        
-        assert_eq!(request, "totototo");
-    }
 
     #[test]
     fn extract_headers_ok() {
@@ -157,5 +189,5 @@ mod tests {
         
         assert_eq!(request, vec![("Content-Length".to_string(), "1".to_string()),("Content-type".to_string(), "x and y".to_string())]);
     }
-
 }
+

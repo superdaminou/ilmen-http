@@ -9,11 +9,16 @@ pub mod header;
 
 pub use router::Routes;
 pub use router::Route;
-pub use router::ParamsHandler;
+pub use router::RequestHandler;
+
 pub use configuration::Config;
+
 pub use requests::HTTPRequest;
+pub use requests::Verb;
+
 pub use responses::HTTPResponse;
 pub use responses::ResponseBuilder;
-pub use requests::Verb;
+
 pub use errors::http_errors::HttpError;
+
 pub use server::HttpServer;

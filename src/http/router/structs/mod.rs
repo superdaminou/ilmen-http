@@ -1,6 +1,6 @@
-mod params_handler;
 mod route;
+mod request_handler;
 
-pub use params_handler::ParamsHandler;
 pub use route::Routes;
 pub use route::Route;
+pub use request_handler::RequestHandler;

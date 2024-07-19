@@ -59,7 +59,7 @@ fn handle_connection(mut stream: TcpStream, handler : Routes, config: Config) {
 
     let response = 
     HTTPRequest::try_from(buffer)
-        .map(|request |  handle_request(request, handler, config))
+        .map(|request |  handle_request(&request, handler, config))
         .unwrap_or_else(HTTPResponse::from);
         
             

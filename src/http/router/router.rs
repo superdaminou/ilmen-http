@@ -2,27 +2,31 @@ use std::panic::catch_unwind;
 
 use log::info;
 
-use crate::{http::{ errors::{http_errors::HttpError, InternalError}, requests::Ressource, security::service::{apply_security, SecurityProtocol}}, Config, HTTPRequest, HTTPResponse, ResponseBuilder, Route, Verb};
+use crate::{http::{ errors::{http_errors::HttpError, InternalError},  security::service::{apply_security, SecurityProtocol}}, Config, HTTPRequest, HTTPResponse, ResponseBuilder, Route, Verb};
 
-use super::{Routes, ParamsHandler};
+use super::{ structs::RequestHandler, Routes};
 
-pub fn handle_request(request: HTTPRequest, handler : Routes, config: Config) -> HTTPResponse {
+pub fn handle_request(request: &HTTPRequest, handler : Routes, config: Config) -> HTTPResponse {
     let response = catch_unwind(||route(&request, handler, config.security()))
-    .map_err(|_| InternalError::from("Internal Server Error"))
-    .map(HTTPResponse::from)
-    .unwrap_or_else(HTTPResponse::from);
-    
-    info!("{} {}", Ressource::from(&request), response.code());
+        .map_err(|_| InternalError::from("Internal Server Error"))
+        .map(HTTPResponse::from)
+        .unwrap_or_else(HTTPResponse::from);
+
+    access_log(&request, &response);
     
     response
 }
 
+fn access_log(request: &HTTPRequest, response: &HTTPResponse) {
+    info!("{} {} {}", request.verb, request.resource, response.code())
+}
+
 fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) -> HTTPResponse {
-    match request.start_line.verb() {
+    match request.verb {
         Verb::OPTION => options(),
         _ => {
-            find_route(request, &handler)
-                .and_then(|route| apply_security(request, route, security))
+            find_route(&request, &handler)
+                .and_then(|route| apply_security(&request, route, security))
                 .map(|route| execute(request, route))
                 .unwrap_or_else(HTTPResponse::from)
             }
@@ -30,14 +34,16 @@ fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) ->
 }
 
 fn execute(request: &HTTPRequest, route: Route ) -> HTTPResponse {
-    (route.method)(ParamsHandler::from((request, route.clone())))   
+    let handler = RequestHandler::from((request, &route));
+    (route.method)(&handler)   
 }
+
 
 fn find_route(request: &HTTPRequest, handler : &Routes) -> Result<Route, HttpError> {
      handler.iter()
-                .filter(|route| route.verb == request.start_line.verb())
+                .filter(|route| route.verb == request.verb)
                 .find(|&route| 
-                    valid_against(request.start_line.resource().clone(), route.route.clone()))
+                    valid_against(request.resource.clone(), route.route.clone()))
                 .map(|r| r.to_owned())
                 .ok_or(HttpError::NotFoundError("Coult not find ressource".to_string()))
 }
@@ -99,19 +105,25 @@ mod tests {
     }
 
     #[test]
-    fn valid_against_ok() {
-        assert!(valid_against("ressource/1/toto/2".to_string(), "ressource/{id}/toto/{dd}".to_string()));
+    fn test_valid_against_combinations() {
+        let combinations :Vec<(Combination, ExpectedResult)> = vec![
+            (Combination::new("ressource/1/toto/2", "ressource/id/toto/{dd}"), false),
+            (Combination::new("ressource/1/toto/2", "ressource/{id}/toto/{dd}"), true),
+            (Combination::new("ressource/1/toto/2?test=12", "ressource/{id}/toto/{dd}"), true)
+            ];
+            
+        combinations.iter().for_each(|combinaisons| assert_eq!(valid_against(combinaisons.0.input.clone(), combinaisons.0.template.clone()), combinaisons.1));
+
     }
 
-    #[test]
-    fn valid_against_ko_param() {
-        assert!(!valid_against("ressource/1/toto/2".to_string(), "ressource/id/toto/{dd}".to_string()));
+    struct Combination{input: String,template:  String}
+    type ExpectedResult = bool;
+    impl Combination {
+        pub fn new(input: &str, template: &str) -> Combination {
+            Combination{input: input.to_string(),template: template.to_string()}
+        }
     }
 
-    #[test]
-    fn valid_against_ko_ressource() {
-        assert!(!valid_against("ressources/1/toto/2".to_string(), "ressource/{id}/toto/{dd}".to_string()));
-    }
 
     #[test]
     fn handle_request_without_security_should_return_200() {
@@ -120,7 +132,7 @@ mod tests {
         let routes = vec![Route::default()];
         let config = Config::default();
 
-        let responses_code = handle_request(request, routes, config).to_string().split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        let responses_code = handle_request(&request, routes, config).to_string().split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
         assert_eq!(responses_code.first().unwrap(), &"HTTP/1.1 200 OK");
     }
 }
