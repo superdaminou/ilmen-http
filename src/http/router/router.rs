@@ -7,12 +7,12 @@ use crate::{http::{ errors::{http_errors::HttpError, InternalError},  security::
 use super::{ structs::RequestHandler, Routes};
 
 pub fn handle_request(request: &HTTPRequest, handler : Routes, config: Config) -> HTTPResponse {
-    let response = catch_unwind(||route(&request, handler, config.security()))
+    let response = catch_unwind(||route(request, handler, config.security()))
         .map_err(|_| InternalError::from("Internal Server Error"))
         .map(HTTPResponse::from)
         .unwrap_or_else(HTTPResponse::from);
 
-    access_log(&request, &response);
+    access_log(request, &response);
     
     response
 }
@@ -25,8 +25,8 @@ fn route(request: &HTTPRequest, handler : Routes, security: SecurityProtocol) ->
     match request.verb {
         Verb::OPTION => options(),
         _ => {
-            find_route(&request, &handler)
-                .and_then(|route| apply_security(&request, route, security))
+            find_route(request, &handler)
+                .and_then(|route| apply_security(request, route, security))
                 .map(|route| execute(request, route))
                 .unwrap_or_else(HTTPResponse::from)
             }

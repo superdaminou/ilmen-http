@@ -19,8 +19,6 @@ pub struct HttpServer {
 }
 
 
-
-
 impl HttpServer {
 
     pub fn new(configuration: Config, handler : Routes) -> Self {

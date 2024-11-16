@@ -1,4 +1,4 @@
-use crate::{http::HTTPRequest, HTTPResponse, ResponseBuilder, Verb};
+use crate::{HTTPResponse, ResponseBuilder, Verb};
 
 use super::request_handler::RequestHandler;
 
@@ -10,6 +10,16 @@ pub struct Route{
     pub need_security: bool
 }
 
+impl Route {
+    pub fn new(verb: &Verb, route: &str, method: fn(&RequestHandler) -> HTTPResponse, need_security: bool) -> Route {
+        Route {
+            verb: *verb,
+            route: route.to_string(), 
+            method,
+            need_security
+        }
+    }
+}
 
 impl Clone for Route {
     fn clone(&self) -> Self {

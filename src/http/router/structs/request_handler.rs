@@ -8,6 +8,21 @@ pub struct RequestHandler {
 }
 
 type PathParams = HashMap<String, String>;
+type QueryParams = HashMap<String, String>;
+
+impl RequestHandler {
+    pub fn query_params(&self) -> Option<QueryParams> {
+        self.request.query_params.clone()
+    } 
+
+    pub fn path_params(&self) -> PathParams {
+        self.path_params.clone()
+    } 
+
+    pub fn body(&self) -> Option<String> {
+        self.request.body.clone()
+    } 
+}
 
 impl From<(&HTTPRequest, &Route)> for RequestHandler {
     fn from(value: (&HTTPRequest, &Route)) -> Self {
@@ -20,9 +35,9 @@ impl From<(&HTTPRequest, &Route)> for RequestHandler {
 
 fn extract_path_params(request: &String, template: &String) -> PathParams {
     let split_request = request.split("/").collect::<Vec<&str>>();
-    template.split("/").enumerate().into_iter()
-        .filter(|(_, v)| v.starts_with("{"))
-        .map(|(i, v)| (v.to_string().drain(1..v.len()-1).collect(), split_request.get(i).unwrap().to_string()))
+    template.split("/").enumerate()
+        .filter(|(_, key)| key.starts_with("{") && key.ends_with("}"))
+        .map(|(index, key)| (key.to_string().drain(1..key.len()-1).collect(), split_request.get(index).unwrap().to_string()))
         .collect::<PathParams>()
 }
 

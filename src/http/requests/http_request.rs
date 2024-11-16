@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::usize;
 use std::str;
@@ -19,7 +20,7 @@ pub struct HTTPRequest {
 
 pub type Resource = String; 
 pub type Protocol = String; 
-pub type QueryParams = Vec<(String, String)>;
+pub type QueryParams = HashMap<String, String>;
 type Body = String;
 
 impl Default for HTTPRequest {
@@ -42,13 +43,11 @@ impl TryFrom<Vec<String>> for Verb {
     type Error = HttpError;
 
     fn try_from(value: Vec<String>) -> Result<Self, HttpError> {
-        value
-            .get(0)
+        value.first()
             .ok_or(HttpError::BadRequest("Missing verb".to_string()))
-            .and_then(|verb| Verb::from_str(&verb))
+            .and_then(|verb| Verb::from_str(verb))
     }
 }
-
 
 
 impl TryFrom<&str> for HTTPRequest {
@@ -56,7 +55,7 @@ impl TryFrom<&str> for HTTPRequest {
     fn try_from(buffer: &str) -> Result<Self, HttpError> {
         let parsed_request = parse(buffer);
         
-        let decomposed_start_line = parsed_request.get(0)
+        let decomposed_start_line = parsed_request.first()
             .ok_or(HttpError::BadRequest("Mising ressources".to_string()))?
             .split(' ')
             .take(3)
@@ -76,7 +75,7 @@ impl TryFrom<&str> for HTTPRequest {
             .ok_or(HttpError::BadRequest("No ressource".to_string()))
             .map(|str| str.split("?").collect::<Vec<&str>>())?; 
 
-        let resource = requested_resource.get(0).ok_or(HttpError::BadRequest("Missing path".to_string()))?;
+        let resource = requested_resource.first().ok_or(HttpError::BadRequest("Missing path".to_string()))?;
 
         let query_params = requested_resource.get(1)
             .map(|params| params.split("&").collect::<Vec<&str>>())
@@ -86,7 +85,7 @@ impl TryFrom<&str> for HTTPRequest {
                         .split_once("=")
                         .unwrap_or((couple, "")))
                     .map(|(a,b)|(a.to_string(), b.to_string()))
-                    .collect::<Vec<(String,String)>>());
+                    .collect::<QueryParams>());
 
 
         let headers = extract_headers(parsed_request.clone());
@@ -100,7 +99,7 @@ impl TryFrom<&str> for HTTPRequest {
 
         Ok (HTTPRequest {protocol, 
             verb, 
-            query_params: query_params, 
+            query_params, 
             headers: Some(headers), 
             body,
             resource: resource.to_string()})
@@ -110,7 +109,7 @@ impl TryFrom<&str> for HTTPRequest {
 
 fn extract_body(request : &str, content_length: usize) -> Body {
     return request.split_once("\r\n\r\n")
-        .map(|(_, b)| b.to_string().drain(0..content_length).collect::<String>())
+        .map(|(_, b)| b[0..content_length].to_string())
         .unwrap_or_default();
 }
 
@@ -160,13 +159,17 @@ mod tests {
     #[test]
     fn request_try_from_ok() {
         let buffer = "POST rappel/1?moi=toi&toi=moi HTTP/1.1\r\nContent-Length: 10\r\n\r\ntoto\r\ntata";
+
+        let mut expected_query_params = HashMap::new();
+        expected_query_params.insert("moi".to_string(), "toi".to_string());
+        expected_query_params.insert("toi".to_string(),"moi".to_string());
         
         let  request = HTTPRequest::try_from(buffer);
         
         let http_request = request.unwrap();
         assert_eq!(http_request.verb, Verb::POST);
         assert_eq!(http_request.resource, "rappel/1");
-        assert_eq!(http_request.query_params, Some(vec![("moi".to_string(), "toi".to_string()), ("toi".to_string(),"moi".to_string())]));
+        assert_eq!(http_request.query_params, Some(expected_query_params));
         assert_eq!(http_request.body, Some("toto\r\ntata".to_string()));
         assert_eq!(http_request.headers, Some(vec![("Content-Length".to_string(), "10".to_string())]))
     }
