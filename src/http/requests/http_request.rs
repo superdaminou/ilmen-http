@@ -126,14 +126,14 @@ impl HTTPRequest {
     pub fn get_header(&self, key: &str) -> Option<(String, String)> {
         self.headers.clone().unwrap_or_default()
             .iter()
-            .find(|(header, _)| header.starts_with(key)).cloned()
+            .find(|(header, _)| header.to_lowercase().starts_with(&key.to_lowercase())).cloned()
     }
 }
 
 fn get_header(headers: &Headers, key: &str) -> Option<(String, String)> {
     headers
         .iter()
-        .find(|(header, _)| header.starts_with(key)).cloned()
+        .find(|(header, _)| header.to_lowercase().starts_with(&key.to_lowercase())).cloned()
 }
 
 fn extract_headers(request : Vec<String>) -> Headers {
@@ -142,7 +142,7 @@ fn extract_headers(request : Vec<String>) -> Headers {
         .take_while(|&str| str.trim() != "")
         .map(|header| header.split_once(':'))
         .map(|spliterator| spliterator.unwrap_or_default())
-        .map(|(a, b)| (a.trim().to_owned(), b.trim().to_owned()))
+        .map(|(cle, value)| (cle.trim().to_lowercase().to_owned(), value.trim().to_owned()))
         .collect::<Headers>()
 }
 
