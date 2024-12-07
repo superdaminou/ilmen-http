@@ -1,6 +1,6 @@
 [package]
 name = "ilmen-http"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 author = "damien@ilmen.fr"
 license = "MIT"

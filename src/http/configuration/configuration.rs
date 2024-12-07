@@ -16,7 +16,7 @@ impl Default for Config {
     fn default() -> Self {
         Self { 
             port: 7878, 
-            ip: "127.0.0.1".to_string(),
+            ip: "localhost".to_string(),
             security: SecurityProtocol::None
         }
     }
@@ -31,11 +31,11 @@ impl Config {
         self.security.clone()
     }
 
-    pub fn new(port: Port, security: SecurityProtocol) -> Config {
+    pub fn new(ip: &str, port: Port, security: SecurityProtocol) -> Config {
         Config {
+            ip: ip.to_string(),
             port,
-            security,
-            ..Default::default()
+            security
         }
     }
 }
