@@ -1,6 +1,6 @@
 [package]
 name = "ilmen-http"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 author = "damien@ilmen.fr"
 license = "MIT"
@@ -17,3 +17,4 @@ strum_macros = "0.26"
 anyhow = {version = "1.0"}
 thiserror = {version = "2.0"}
 base64 = { version = "0.22" }
+signal-hook = { version = "0.3.17"}

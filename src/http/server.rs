@@ -1,6 +1,9 @@
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use log::info;
 
 use crate::http::router::handle_request;
@@ -35,16 +38,18 @@ impl HttpServer {
         let listener = TcpListener::bind(config.adresse()).unwrap();
         info!("Initializing thread pool : {}", 5);
         let pool = ThreadPool::new(5);
-
-
-        for stream in listener.incoming() {
-            let stream = stream.unwrap();
-            let routes = self.handler.clone();
-            let config = config.clone();
-
-            pool.execute(move || {
-                handle_connection(stream, routes, config);
-            });
+        let term = Arc::new(AtomicBool::new(false));
+        signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term)).unwrap();
+        while !term.load(Ordering::Relaxed) {
+            for stream in listener.incoming() {
+                let stream = stream.unwrap();
+                let routes = self.handler.clone();
+                let config = config.clone();
+    
+                pool.execute(move || {
+                    handle_connection(stream, routes, config);
+                });
+            }
         }
    } 
 }
