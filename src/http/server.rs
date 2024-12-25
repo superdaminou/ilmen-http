@@ -21,7 +21,6 @@ pub struct HttpServer {
     handler : Routes
 }
 
-
 impl HttpServer {
 
     pub fn new(configuration: Config, handler : Routes) -> Self {
@@ -57,7 +56,7 @@ impl HttpServer {
 
 // PRIVATE
 fn handle_connection(mut stream: TcpStream, handler : Routes, config: Config) {
-    let mut buffer: [u8; 1024] = [0; 1024];
+    let mut buffer: Vec<u8> = vec![0; config.request_size()];
     stream.read(&mut buffer).unwrap();
 
     let response = 

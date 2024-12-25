@@ -4,11 +4,22 @@ DO NOT USE IN PRODUCTION
 
 A small, home made, weird little http server.
 
+## Default configuration
 
-With Default configuration and no-security
-```
+- Port: 7878
+- Adress: 0.0.0.0
+- Security: None
+- Request Size: 10 Mo
+
+## A quick usage example
+
+```rust
 fn main() {
-    let config=Config::new(8082, SecurityProtocol::Basic(auth_method));
+    let config=Config::initialize()
+        .with_adresse("127.0.0.2", 8082)
+        .with_security(&SecurityProtocol::Basic(auth_validate))
+        .with_request_size(123456)
+        .to_owned();
     let server= HttpServer::new(config, routes());
 
     server.start();

@@ -5,7 +5,8 @@ use crate::http::security::service::SecurityProtocol;
 pub struct Config {
     port: Port,
     ip: Ip,
-    security: SecurityProtocol
+    security: SecurityProtocol,
+    request_size: usize
 }
 
 
@@ -16,8 +17,9 @@ impl Default for Config {
     fn default() -> Self {
         Self { 
             port: 7878, 
-            ip: "localhost".to_string(),
-            security: SecurityProtocol::None
+            ip: "0.0.0.0".to_string(),
+            security: SecurityProtocol::None,
+            request_size: 10485760
         }
     }
 }
@@ -31,11 +33,27 @@ impl Config {
         self.security.clone()
     }
 
-    pub fn new(ip: &str, port: Port, security: SecurityProtocol) -> Config {
-        Config {
-            ip: ip.to_string(),
-            port,
-            security
-        }
+    pub fn request_size(&self) -> usize {
+        self.request_size
+    }
+
+    pub fn initialize() -> Config {
+        Config::default()
+    }
+
+    pub fn with_request_size(&mut self, size: &usize) -> &mut Self {
+        self.request_size = *size;
+        self
+    }
+
+    pub fn with_security(&mut self, security: &SecurityProtocol) -> &mut Self {
+        self.security = security.clone();
+        self
+    }
+
+    pub fn with_adresse(&mut self, ip: &str, port: &Port) ->  &mut Self {
+        self.ip = ip.to_string();
+        self.port = *port;
+        self
     }
 }

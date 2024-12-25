@@ -29,9 +29,9 @@ impl Default for HTTPRequest {
     }
 }
 
-impl TryFrom<[u8; 1024]> for HTTPRequest {
+impl TryFrom<Vec<u8>> for HTTPRequest {
     type Error = HttpError;
-    fn try_from(value: [u8; 1024]) -> Result<Self, HttpError> {
+    fn try_from(value: Vec<u8>) -> Result<Self, HttpError> {
         str::from_utf8(&value)
         .map_err(|error| 
             HttpError::BadRequest(error.to_string()))
@@ -133,7 +133,8 @@ impl HTTPRequest {
 fn get_header(headers: &Headers, key: &str) -> Option<(String, String)> {
     headers
         .iter()
-        .find(|(header, _)| header.to_lowercase().starts_with(&key.to_lowercase())).cloned()
+        .find(|(header, _)| header.to_lowercase().starts_with(&key.to_lowercase()))
+        .cloned()
 }
 
 fn extract_headers(request : Vec<String>) -> Headers {
@@ -142,7 +143,7 @@ fn extract_headers(request : Vec<String>) -> Headers {
         .take_while(|&str| str.trim() != "")
         .map(|header| header.split_once(':'))
         .map(|spliterator| spliterator.unwrap_or_default())
-        .map(|(cle, value)| (cle.trim().to_lowercase().to_owned(), value.trim().to_owned()))
+        .map(|(cle, value)| (cle.trim().to_owned(), value.trim().to_owned()))
         .collect::<Headers>()
 }
 
