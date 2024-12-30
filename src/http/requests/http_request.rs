@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::usize;
 use std::str;
-use log::info;
+use log::trace;
 
 use crate::http::errors::http_errors::HttpError;
 use crate::http::header::Headers;
@@ -89,7 +89,7 @@ impl TryFrom<&str> for HTTPRequest {
 
 
         let headers = extract_headers(parsed_request.clone());
-        info!("Headers: {:?}", headers);
+        trace!("Headers: {:?}", headers);
         
         let body = get_header(&headers, "Content-Length")
             .map(|(_, length)| length.parse::<usize>())

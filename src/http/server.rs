@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use log::info;
+use log::trace;
 
 use crate::http::router::handle_request;
 use crate::http::requests::HTTPRequest;
@@ -65,7 +66,7 @@ fn handle_connection(mut stream: TcpStream, handler : Routes, config: Config) {
         .unwrap_or_else(HTTPResponse::from);
         
             
-    info!("{}", response.to_string());
+    trace!("Response: {}", response.to_string());
     write(stream, response.to_string());
 }
 

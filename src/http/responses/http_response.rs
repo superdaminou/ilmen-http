@@ -44,10 +44,7 @@ fn message_from_code(code : i32) -> String {
 impl fmt::Display for HTTPResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let headers= self.headers.iter().map(|(key, value)| key.to_string() + ": " + value).collect::<Vec<String>>().join("\r\n");
-        let body = match &self.body {
-            Some(body) =>  "\r\n\r\n".to_string() + body,
-            None => "\r\n".to_string(),
-        };
+        let body ="\r\n".to_string() +  &self.body.to_owned().unwrap_or_default();
         write!(f,
             "{}\r\n{}{}",
             construct_status_line(self.code),
